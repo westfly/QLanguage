@@ -1,28 +1,33 @@
-﻿/********************************************************************
-	created:	2013/04/08
-	created:	8:4:2013   16:30
-	filename: 	\QCore\Library\fstream.h
+/********************************************************************
+	created:	2013/04/28
+	created:	28:4:2013   14:54
+	filename: 	\QCore\Library\stdstream.h
 	file path:	\QCore\Library
-	file base:	fstream
+	file base:	stdstream
 	file ext:	h
 	author:		lwch
 
 	purpose:
 *********************************************************************/
-
-#ifndef _QLANGUAGE_LIBRARY_FSTREAM_H_
-#define _QLANGUAGE_LIBRARY_FSTREAM_H_
-
-#ifdef MSVC
-#include <io.h>
-#endif
-#include <fcntl.h>
-#include <sys/stat.h>
+#ifndef _QLANGUAGE_LIBRARY_STD_STREAM_H_
+#define _QLANGUAGE_LIBRARY_STD_STREAM_H_
 
 #include "definition.h"
 #include "istream.h"
 #include "ostream.h"
 #include "buffer.h"
+
+#ifdef MSVC
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+#include <fcntl.h>
+#include <sys/stat.h>
+
+#ifdef WIN32
+#include <windows.h>
+#endif
 
 #ifdef MSVC
 #define OPEN  _open
@@ -44,44 +49,46 @@
 #endif
 
 NAMESPACE_QLANGUAGE_LIBRARY_START
+typedef error<const char*> err;
+#define CHECK_FILE_OPEN  if (!this->is_open())                     throw err("not opened file", __FILE__, __LINE__)
+#define CHECK_IN_MODE    if (!this->is_in())                       throw err("not in mode"    , __FILE__, __LINE__)
+#define CHECK_OUT_MODE   if (!this->is_out() && !this->is_error()) throw err("not out mode"   , __FILE__, __LINE__)
+#define CHECK_ERROR_MODE if (!this->is_error())                    throw err("not error mode" , __FILE__, __LINE__)
 
-#define CHECK_FILE_OPEN if (!is_open()) throw error<const char*>("not opened file", __FILE__, __LINE__)
-#define CHECK_IN_MODE   if ((this->open_mode() & fstream_basic<T>::in) == 0)  throw error<const char*>("not in mode", __FILE__, __LINE__)
-#define CHECK_OUT_MODE  if ((this->open_mode() & fstream_basic<T>::out) == 0) throw error<const char*>("not out mode", __FILE__, __LINE__)
+#ifndef STDIN_FILENO
+#define STDIN_FILENO 0
+#endif
+
+#ifndef STDOUT_FILENO
+#define STDOUT_FILENO 1
+#endif
+
+#ifndef STDERR_FILENO
+#define STDERR_FILENO 2
+#endif
+    template <typename T>
+    class stdstream_basic;
 
     template <typename T>
-    class fstream_basic;
-
-    template <typename T>
-    class fstream_buffer : public buffer
+    class stdstream_buffer : public buffer
     {
     public:
         typedef buffer::value_type   value_type;
         typedef buffer::size_type    size_type;
         typedef buffer::_char_traits char_traits;
 
-        fstream_buffer(fstream_basic<T>* parent) : parent(parent) {}
-
-        inline const bool check_flush()const
-        {
-            return container.size() >= align;
-        }
-
-        inline bool flush()
-        {
-            return parent->flush();
-        }
+        stdstream_buffer(stdstream_basic<T>* parent) : parent(parent) {}
     protected:
-        fstream_basic<T>* parent;
+        stdstream_basic<T>* parent;
     };
 
     template <typename T>
-    class fstream_basic : public basic_istream<T>,
-                          public basic_ostream<T>
+    class stdstream_basic : public basic_istream<T>
+                          , public basic_ostream<T>
     {
-        typedef fstream_basic<T> self;
-        typedef basic_istream<T> parent_i;
-        typedef basic_ostream<T> parent_o;
+        typedef stdstream_basic<T> self;
+        typedef basic_istream<T>   parent_i;
+        typedef basic_ostream<T>   parent_o;
     public:
         typedef T      value_type;
         typedef size_t size_type;
@@ -95,89 +102,63 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
 
         enum openmode
         {
-            append = 1,
-            in     = 2,
-            out    = 4
+            uninitialized = 0,
+            in    = 1,
+            out   = 2,
+            error = 4,
         };
 
-        fstream_basic() : parent_i(), parent_o(), buffer_write(this), buffer_read(this), bOpen(false), iFile(0) {}
-
-        fstream_basic(const char* path, uchar mode) : parent_i(), parent_o(), buffer_write(this), buffer_read(this), bOpen(false), iFile(0)
+        enum colortype
         {
-            open(path, mode);
+            black = 0,
+            red   = 1,
+            green = 2,
+            blue  = 4,
+            light = 8,
+            yellow = red | green,
+            purple = red | blue,
+            ching  = green | blue,
+            white  = red | green | blue
+        };
+
+        stdstream_basic() : parent_i(), parent_o(), buffer_read(this), openMode(uninitialized), bOpen(false), iFile(STDOUT_FILENO), ulTell(0) {}
+
+        stdstream_basic(openmode mode) : parent_i(), parent_o(), buffer_read(this), iFile(STDOUT_FILENO), ulTell(0)
+        {
+            open(mode);
         }
 
-        virtual ~fstream_basic()
-        {
-            if (is_open())
-            {
-                if (ucOpenMode & out) flush();
-                close();
-            }
-        }
+        virtual ~stdstream_basic() {}
 
-        self& open(const char* path, uchar mode)
+        self& open(openmode mode)
         {
-            if (is_open()) throw error<const char*>("file is open", __FILE__, __LINE__);
-
-            int flag = 0;
+            openMode = mode;
+            bOpen    = true;
             switch (mode)
             {
-            case out | append:
-                flag = O_WRONLY | O_APPEND | O_CREAT;
+            case in:
+                iFile = STDIN_FILENO;
                 break;
             case out:
-                flag = O_WRONLY | O_TRUNC | O_CREAT;
+                iFile = STDOUT_FILENO;
                 break;
-            case in:
-                flag = O_RDONLY;
-                break;
-            case in | out:
-                flag = O_RDWR | O_TRUNC | O_CREAT;
+            case error:
+                iFile = STDERR_FILENO;
                 break;
             default:
-                throw error<const char*>("error open mode", __FILE__, __LINE__);
+                throw err("not support openmode", __FILE__, __LINE__);
                 break;
             }
-
-#ifdef WIN32
-            flag |= O_BINARY;
-#endif
-
-            iFile = ::OPEN(path, flag, S_IREAD | S_IWRITE);
-            bOpen = true;
-            ucOpenMode = mode;
-
-            if (mode & append)
-            {
-                ulTell = size();
-                seek(0, end);
-            }
-            else ulTell = 0;
-
             return *this;
         }
 
-        bool close()
-        {
-            CHECK_FILE_OPEN;
-
-            bool bResult = false;
-            if (iFile)
-            {
-                bResult = (::CLOSE(iFile) == 0);
-                if (bResult) bOpen = false;
-            }
-            return bResult;
-        }
-
-        inline const uchar open_mode()const            { return ucOpenMode;             }
         inline const bool is_open()const               { return bOpen;                  }
-        inline const size_type write_cache_size()const { return buffer_write.size();    }
+        inline const openmode open_mode()const         { return openMode;               }
+        inline const bool is_in()const                 { return openMode == in;         }
+        inline const bool is_out()const                { return openMode == out;        }
+        inline const bool is_error()const              { return openMode == error;      }
         inline const size_type read_cache_size()const  { return buffer_read.size();     }
-        inline const value_type* write_pointer()const  { return buffer_write.pointer(); }
         inline const value_type* read_pointer()const   { return buffer_read.pointer();  }
-        inline void step_write_cache(size_type size)   { buffer_write.step(size);       }
         inline void step_read_cache(size_type size)    { buffer_read.step(size);        }
 
         inline const size_type size()const
@@ -205,17 +186,17 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
             switch (type)
             {
             case begin:
-                if ((size_t)offset > size()) throw error<const char*>("offset out of range", __FILE__, __LINE__);
+                if ((size_t)offset > size()) throw err("offset out of range", __FILE__, __LINE__);
                 where  = SEEK_SET;
                 ulTell = offset;
                 break;
             case end:
-                if ((size_t)offset > size()) throw error<const char*>("offset out of range", __FILE__, __LINE__);
+                if ((size_t)offset > size()) throw err("offset out of range", __FILE__, __LINE__);
                 where  = SEEK_END;
                 ulTell = size() - offset;
                 break;
             case current:
-                if (tell() + offset >= size() || tell() + offset < 0) throw error<const char*>("offset out of range", __FILE__, __LINE__);
+                if (tell() + offset >= size() || tell() + offset < 0) throw err("offset out of range", __FILE__, __LINE__);
                 where   = SEEK_CUR;
                 ulTell += offset;
                 break;
@@ -226,134 +207,118 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
             return *this;
         }
 
-        bool write(const char* buffer, size_type size)
-        {
-            CHECK_FILE_OPEN;
-            CHECK_OUT_MODE;
-
-            bool bResult = this->buffer_write.append(buffer, size);
-
-            if (bResult && this->buffer_write.check_flush())
-            {
-                bResult = this->buffer_write.flush();
-            }
-
-            return bResult;
-        }
-
         size_type read()
         {
             CHECK_FILE_OPEN;
             CHECK_IN_MODE;
 
-            size_type _size = min(size() - tell(), static_cast<size_type>(fstream_buffer<T>::align));
-            value_type* buffer = this->buffer_read.reserve(_size);
+            if (buffer_read.size()) return buffer_read.size();
 
-            int readen = 0;
+            char buffer[stdstream_buffer<T>::align] = {0};
+
             while (true)
             {
-                int _read = ::READ(iFile, buffer, _size);
-                if (_read > 0)
+                int _read = ::READ(iFile, buffer, stdstream_buffer<T>::align);
+                if (_read == -1) continue;
+                ulTell += _read;
+                if (buffer[_read - 1] == '\n')
                 {
-                    readen += _read;
-                    ulTell += _read;
-                    if ((size_type)readen == _size) return _size;
-                    else
-                    {
-                        buffer += _read;
-                        _size  -= _read;
-                    }
-                }
-                else
-                {
-                    this->buffer_read.clear();
-                    throw error<const char*>("can't read file", __FILE__, __LINE__);
+                    buffer_read.append(buffer, _read - 1);
+                    break;
                 }
             }
+            return buffer_read.size();
         }
 
-        bool readAll(value_type* ptr, size_type sz)
-        {
-            CHECK_FILE_OPEN;
-            CHECK_IN_MODE;
-
-            size_type _size  = min(sz, size());
-            int readen = 0;
-            while (true)
-            {
-                int _read = ::READ(iFile, ptr, _size);
-                if (_read > 0)
-                {
-                    readen += _read;
-                    ulTell += _read;
-                    if ((size_type)readen == _size) return true;
-                    else
-                    {
-                        ptr   += _read;
-                        _size -= _read;
-                    }
-                }
-                else
-                {
-                    throw error<const char*>("can't read file", __FILE__, __LINE__);
-                }
-            }
-        }
-
-        bool flush()
+        bool write(const char* buffer, size_type size)
         {
             CHECK_FILE_OPEN;
             CHECK_OUT_MODE;
 
-            size_type size = buffer_write.size();
-            if (size == 0) return true;
-            const typename fstream_buffer<T>::value_type* buffer = this->buffer_write.pointer();
             while (true)
             {
                 int written = ::WRITE(iFile, buffer, size);
                 if (written > 0)
                 {
                     ulTell += written;
-                    if ((size_type)written == size)
-                    {
-                        this->buffer_write.clear();
-                        return true;
-                    }
+                    if ((size_type)written == size) return true;
                     else
                     {
                         buffer += written;
-                        size -= written;
+                        size   -= written;
                     }
                 }
                 else
                 {
-                    this->buffer_write.clear();
-                    throw error<const char*>("can't write file", __FILE__, __LINE__);
+                    throw err("can't write file", __FILE__, __LINE__);
+                    return false;
                 }
             }
+            return true;
+        }
+
+        inline bool flush()
+        {
+            return true;
+        }
+
+        void setColor(uchar color)
+        {
+#ifdef WIN32
+            WORD wdColor = 0;
+            if (color & red)   wdColor |= FOREGROUND_RED;
+            if (color & green) wdColor |= FOREGROUND_GREEN;
+            if (color & blue)  wdColor |= FOREGROUND_BLUE;
+            if (color & light) wdColor |= FOREGROUND_INTENSITY;
+            SetConsoleTextAttribute(GetStdHandle(STD_INPUT_HANDLE), wdColor);
+            SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), wdColor);
+#else
+            char cColor = 0;
+            if (color & red)   cColor |= 1;
+            if (color & green) cColor |= 2;
+            if (color & blue)  cColor |= 4;
+            //printf("%s\033[%dm", color & light ? "\033[1m" : "", 30 + cColor);
+            *this << string::format("%s\033[%dm", color & light ? "\033[1m" : "", 30 + cColor);
+#endif
+        }
+
+        inline uchar redWith(uchar color)
+        {
+            return red | color;
+        }
+
+        inline uchar greenWith(uchar color)
+        {
+            return green | color;
+        }
+
+        inline uchar blueWith(uchar color)
+        {
+            return blue | color;
+        }
+
+        inline uchar lightWith(uchar color)
+        {
+            return light | color;
         }
     protected:
-        fstream_buffer<T> buffer_write;
-        fstream_buffer<T> buffer_read;
-        bool  bOpen;
-        int   iFile;
-        uchar ucOpenMode;
-        ulong ulTell;
+        stdstream_buffer<T> buffer_read;
+        openmode openMode;
+        bool     bOpen;
+        int      iFile;
+        ulong    ulTell;
     };
 
     template <typename T>
-    class basic_fstream : public fstream_basic<T>
+    class basic_stdstream : public stdstream_basic<T>
     {
-        typedef basic_fstream<T> self;
-        typedef fstream_basic<T> parent;
-        typedef basic_istream<T> parent_i;
-        typedef basic_ostream<T> parent_o;
+        typedef basic_stdstream<T> self;
+        typedef stdstream_basic<T> parent;
     public:
-        basic_fstream() : parent() {}
-        basic_fstream(const char* path, uchar mode) : parent(path, mode) {}
-        basic_fstream(const string& path, uchar mode) : parent(path.c_str(), mode) {}
+        basic_stdstream() : parent() {}
+        basic_stdstream(typename parent::openmode mode) : parent(mode) {}
 
-        virtual ~basic_fstream() {}
+        virtual ~basic_stdstream() {}
 
         virtual self& operator>>(bool&)
         {
@@ -365,7 +330,7 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
         {
             CHECK_IN_MODE;
             const typename parent::value_type* p = this->read_pointer();
-            if (this->read_cache_size() < fstream_buffer<T>::half_align)
+            if (this->read_cache_size() < stdstream_buffer<T>::half_align)
             {
                 this->read();
                 p = this->read_pointer();
@@ -380,7 +345,7 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
         {
             CHECK_IN_MODE;
             const typename parent::value_type* p = this->read_pointer();
-            if (this->read_cache_size() < fstream_buffer<T>::half_align)
+            if (this->read_cache_size() < stdstream_buffer<T>::half_align)
             {
                 this->read();
                 p = this->read_pointer();
@@ -395,7 +360,7 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
         {
             CHECK_IN_MODE;
             const typename parent::value_type* p = this->read_pointer();
-            if (this->read_cache_size() < fstream_buffer<T>::half_align)
+            if (this->read_cache_size() < stdstream_buffer<T>::half_align)
             {
                 this->read();
                 p = this->read_pointer();
@@ -410,7 +375,7 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
         {
             CHECK_IN_MODE;
             const typename parent::value_type* p = this->read_pointer();
-            if (this->read_cache_size() < fstream_buffer<T>::half_align)
+            if (this->read_cache_size() < stdstream_buffer<T>::half_align)
             {
                 this->read();
                 p = this->read_pointer();
@@ -425,7 +390,7 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
         {
             CHECK_IN_MODE;
             const typename parent::value_type* p = this->read_pointer();
-            if (this->read_cache_size() < fstream_buffer<T>::half_align)
+            if (this->read_cache_size() < stdstream_buffer<T>::half_align)
             {
                 this->read();
                 p = this->read_pointer();
@@ -440,7 +405,7 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
         {
             CHECK_IN_MODE;
             const typename parent::value_type* p = this->read_pointer();
-            if (this->read_cache_size() < fstream_buffer<T>::half_align)
+            if (this->read_cache_size() < stdstream_buffer<T>::half_align)
             {
                 this->read();
                 p = this->read_pointer();
@@ -455,7 +420,7 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
         {
             CHECK_IN_MODE;
             const typename parent::value_type* p = this->read_pointer();
-            if (this->read_cache_size() < fstream_buffer<T>::half_align)
+            if (this->read_cache_size() < stdstream_buffer<T>::half_align)
             {
                 this->read();
                 p = this->read_pointer();
@@ -470,7 +435,7 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
         {
             CHECK_IN_MODE;
             const typename parent::value_type* p = this->read_pointer();
-            if (this->read_cache_size() < fstream_buffer<T>::half_align)
+            if (this->read_cache_size() < stdstream_buffer<T>::half_align)
             {
                 this->read();
                 p = this->read_pointer();
@@ -485,7 +450,7 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
         {
             CHECK_IN_MODE;
             const typename parent::value_type* p = this->read_pointer();
-            if (this->read_cache_size() < fstream_buffer<T>::half_align)
+            if (this->read_cache_size() < stdstream_buffer<T>::half_align)
             {
                 this->read();
                 p = this->read_pointer();
@@ -597,7 +562,7 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
         {
             CHECK_OUT_MODE;
 
-            this->write(p, fstream_buffer<T>::char_traits::length(p));
+            this->write(p, stdstream_buffer<T>::char_traits::length(p));
             return *this;
         }
 
@@ -611,7 +576,7 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
 
         self& operator<<(self& (*f)(self&))
         {
-            return dynamic_cast<self&>(f(*this));
+            return f(*this);
         }
 
         template <typename T1>
@@ -624,7 +589,7 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
         }
     };
 
-    typedef basic_fstream<char> fstream;
+    typedef basic_stdstream<char> stdstream;
 
 #undef OPEN
 #undef CLOSE
@@ -638,9 +603,11 @@ NAMESPACE_QLANGUAGE_LIBRARY_START
 #undef TELL
 #endif
 
+#undef err
 #undef CHECK_FILE_OPEN
 #undef CHECK_IN_MODE
 #undef CHECK_OUT_MODE
+#undef CHECK_ERROR_MODE
 NAMESPACE_QLANGUAGE_LIBRARY_END
 
 #endif

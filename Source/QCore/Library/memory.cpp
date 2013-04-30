@@ -13,7 +13,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "Console.h"
+#include "iostream.h"
 #include "typedef.h"
 #include "memory.h"
 
@@ -36,14 +36,14 @@ MemoryPool::~MemoryPool()
         use *ptr = use_list, *next = use_list->next;
         if (!ptr->data->released)
         {
-            Console::SetColor(true, false, false, true);
 #if DEBUG_LEVEL == 3 && defined(_DEBUG) && defined(WIN32) && !defined(__MINGW32__) && !defined(__CYGWIN__)
             obj* pObj = ptr->data;
             for (DWORD j = 0; j < pObj->dwCallStackDepth; ++j)
             {
                 CallStack::FuncInfo funcInfo;
                 CallStack::getInstance().getFuncInfo(pObj->callStack[j], funcInfo);
-                printf("MemoryLeaked: %s\nFile: %s in line %d\n", funcInfo.szFuncName, funcInfo.szFilePath, funcInfo.dwLineNumber);
+                cerr << string::format("MemoryLeaked: %s", funcInfo.szFuncName) << endl;
+                cerr << string::format("File: %s on line %d", funcInfo.szFilePath, funcInfo.dwLineNumber) << endl;
             }
 #endif
             throw error<const char*>("chunk leaked", __FILE__, __LINE__);
@@ -74,7 +74,8 @@ void MemoryPool::clear()
             {
                 CallStack::FuncInfo info;
                 CallStack::getInstance().getFuncInfo(current->callStack[i], info);
-                printf("ERROR: %s\n%s on line %d", info.szFuncName, info.szFilePath, info.dwLineNumber);
+                cerr << string::format("ERROR: %s", info.szFuncName) << endl;
+                cerr << string::format("%s on line %d", info.szFilePath, info.dwLineNumber);
             }
 #endif
         }
@@ -143,12 +144,6 @@ void MemoryPool::deallocate(void* p, size_type n)
     p = (char*)p - (int)headerSize;
     obj* ptr = reinterpret_cast<obj*>(p);
 #if DEBUG_LEVEL == 3 && defined(WIN32) && !defined(__MINGW32__) && !defined(__CYGWIN__)
-//     for (DWORD j = 0; j < ptr->dwCallStackDepth; ++j)
-//     {
-//         CallStack::FuncInfo funcInfo;
-//         callStack.getFuncInfo(ptr->callStack[j], funcInfo);
-//         printf("MemoryLeaked: %s\nFile: %s in line %d\n", funcInfo.szFuncName, funcInfo.szFilePath, funcInfo.dwLineNumber);
-//     }
     memset(ptr->callStack, 0, CALLSTACK_MAX_DEPTH * sizeof(UINT_PTR));
 #endif
     if (ptr->released) throw error<const char*>("chunk has already released", __FILE__, __LINE__);

@@ -36,5 +36,11 @@ TEST_CASE(TestStream)
     TEST_ASSERT(fs.size() != 22, "file size error!");
     fs.seek(-9, fstream::current);
     fs >> s;
+#else
+    int i;
 #endif
+    cout << 100 << endl;
+    cout << "please input 100:" << endl;
+    cin >> i;
+    TEST_ASSERT(i != 100, "input number is not 100");
 }

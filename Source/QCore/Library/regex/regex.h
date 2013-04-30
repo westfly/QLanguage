@@ -6,8 +6,8 @@
 	file base:	regex
 	file ext:	h
 	author:		lwch
-	
-	purpose:	
+
+	purpose:
 *********************************************************************/
 #ifndef _QLANGUAGE_LIBRARY_REGEX_REGEX_H_
 #define _QLANGUAGE_LIBRARY_REGEX_REGEX_H_
@@ -20,6 +20,7 @@
 #include "../hashmap.h"
 #include "../queue.h"
 #include "../stack.h"
+#include "../iostream.h"
 #include "../fstream.h"
 
 NAMESPACE_QLANGUAGE_LIBRARY_START
@@ -44,13 +45,13 @@ namespace regex
 
             union
             {
-                struct 
+                struct
                 {
                     char value1;
                     char value2;
                 }Char;
 
-                struct 
+                struct
                 {
                     const char*  value;
                     size_t size;
@@ -308,7 +309,7 @@ namespace regex
             inline const bool compare_fromto(char c)const
             {
 #ifdef _DEBUG
-                if (!isFromTo()) throw error<string>("error calling function compare_fromto!", __FILE__, __LINE__);
+                if (!isFromTo()) throw error<const char*>("error calling function compare_fromto!", __FILE__, __LINE__);
 #endif
                 if (isNot()) return c < value.data.Char.value1 || c > value.data.Char.value2;
                 else return c >= value.data.Char.value1 && c <= value.data.Char.value2;
@@ -317,7 +318,7 @@ namespace regex
             inline const bool compare_char(char c)const
             {
 #ifdef _DEBUG
-                if (!isChar()) throw error<string>("error calling function compare_char!", __FILE__, __LINE__);
+                if (!isChar()) throw error<const char*>("error calling function compare_char!", __FILE__, __LINE__);
 #endif
                 if (isNot()) return c != value.data.Char.value1;
                 else return c == value.data.Char.value1;
@@ -326,7 +327,7 @@ namespace regex
             const bool compare_string(const char* first, const char* last, size_t& n)const
             {
 #ifdef _DEBUG
-                if (!isString()) throw error<string>("error calling function compare_string!", __FILE__, __LINE__);
+                if (!isString()) throw error<const char*>("error calling function compare_string!", __FILE__, __LINE__);
 #endif
                 if (!isNot())
                 {
@@ -483,7 +484,7 @@ public:
             }
             else
             {
-                throw error<string>("doesn't support", __FILE__, __LINE__);
+                throw error<const char*>("doesn't support", __FILE__, __LINE__);
             }
             return Rule();
         }
@@ -539,7 +540,7 @@ public:
         {
             Rule a(pContext);
             cloneEpsilonNFA(*this, a);
-            
+
             a.epsilonNFA_Edges[a.pEpsilonEnd].push_back(EpsilonNFA_Edge(a.pEpsilonEnd, a.pEpsilonStart));
 
             return a;
@@ -658,7 +659,7 @@ public:
         MatchResult match(const char* first, const char* last, size_t pos = 0)
         {
 #ifdef _DEBUG
-            if (pos < 0 || pos >= (size_t)(last - first)) throw error<string>("invalid position of input", __FILE__, __LINE__);
+            if (pos < 0 || pos >= (size_t)(last - first)) throw error<const char*>("invalid position of input", __FILE__, __LINE__);
 #endif
             const char* b = first;
 
@@ -688,87 +689,87 @@ public:
 #ifdef _DEBUG
         void printEpsilonNFA()const
         {
-            printf("-------- ε- NFA Start --------\n");
+            cout << "-------- ε- NFA Start --------" << endl;
             for (hashmap<EpsilonNFA_State*, vector<EpsilonNFA_Edge> >::const_iterator i = epsilonNFA_Edges.begin(), m = epsilonNFA_Edges.end(); i != m; ++i)
             {
                 for (vector<EpsilonNFA_Edge>::const_iterator j = i->second.begin(), n = i->second.end(); j != n; ++j)
                 {
-                    printf("%03d -> %03d", j->pFrom->idx, j->pTo->idx);
+                    cout << string::format("%03d -> %03d", j->pFrom->idx, j->pTo->idx);
                     switch (j->edgeType())
                     {
                     case Variant::TEpsilon:
-                        printf("(ε)");
+                        cout << "(ε)";
                         break;
                     case Variant::TFromTo:
-                        printf("(%c - %c)", j->value.data.Char.value1, j->value.data.Char.value2);
+                        cout << string::format("(%c - %c)", j->value.data.Char.value1, j->value.data.Char.value2);
                         break;
                     case Variant::TChar:
-                        printf("(%c)", j->value.data.Char.value1);
+                        cout << string::format("(%c)", j->value.data.Char.value1);
                         break;
                     case Variant::TString:
-                        printf("(%s)", j->value.data.String.value);
+                        cout << string::format("(%s)", j->value.data.String.value);
                         break;
                     default:
                         break;
                     }
-                    if (j->isNot()) printf("(not)");
-                    printf("\n");
+                    if (j->isNot()) cout << "(not)";
+                    cout << endl;
                 }
             }
-            if (pEpsilonStart && pEpsilonEnd) printf("start: %03d -> end: %03d\n", pEpsilonStart->idx, pEpsilonEnd->idx);
-            printf("--------- ε- NFA End ---------\n");
+            if (pEpsilonStart && pEpsilonEnd) cout << string::format("start: %03d -> end: %03d", pEpsilonStart->idx, pEpsilonEnd->idx) << endl;
+            cout << "--------- ε- NFA End ---------" << endl;
         }
 
         void printDFA()
         {
-            printf("---------- DFA Start ----------\n");
+            cout << "---------- DFA Start ----------" << endl;
             set<DFA_State*> tmp;
             for (hashmap<DFA_State*, vector<DFA_Edge> >::const_iterator i = dfa_Edges.begin(), m = dfa_Edges.end(); i != m; ++i)
             {
                 for (vector<DFA_Edge>::const_iterator j = i->second.begin(), n = i->second.end(); j != n; ++j)
                 {
-                    printf("%03d -> %03d", j->pFrom->idx, j->pTo->idx);
+                    cout << string::format("%03d -> %03d", j->pFrom->idx, j->pTo->idx);
                     switch (j->edgeType())
                     {
                     case Variant::TFromTo:
-                        printf("(%c - %c)", j->value.data.Char.value1, j->value.data.Char.value2);
+                        cout << string::format("(%c - %c)", j->value.data.Char.value1, j->value.data.Char.value2);
                         break;
                     case Variant::TChar:
-                        printf("(%c)", j->value.data.Char.value1);
+                        cout << string::format("(%c)", j->value.data.Char.value1);
                         break;
                     case Variant::TString:
-                        printf("(%s)", j->value.data.String.value);
+                        cout << string::format("(%s)", j->value.data.String.value);
                         break;
                     default:
                         break;
                     }
-                    if (j->isNot()) printf("(not)");
-                    printf("\n");
+                    if (j->isNot()) cout << "(not)";
+                    cout << endl;
                     tmp.insert(j->pFrom);
                     tmp.insert(j->pTo);
                 }
             }
 
-            printf("start: %03d -> ends: ", pDFAStart->idx);
+            cout << string::format("start: %03d -> ends: ", pDFAStart->idx);
             for (set<DFA_State*>::const_iterator i = pDFAEnds.begin(), m = pDFAEnds.end(); i != m; ++i)
             {
-                printf("%03d ", (*i)->idx);
+                cout << string::format("%03d ", (*i)->idx);
             }
-            printf("\n");
+            cout << endl;
 #if DEBUG_LEVEL == 3
-            printf("-------------------------------\n");
+            cout << ("-------------------------------") << endl;
 
             for (set<DFA_State*>::const_iterator i = tmp.begin(), m = tmp.end(); i != m; ++i)
             {
-                printf("State: %03d\n", (*i)->idx);
+                cout << string::format("State: %03d", (*i)->idx) << endl;
                 for (vector<EpsilonNFA_State*>::const_iterator j = (*i)->content.begin(), n = (*i)->content.end(); j != n; ++j)
                 {
-                    printf("%03d ", (*j)->idx);
+                    cout << string::format("%03d ", (*j)->idx);
                 }
-                printf("\n");
+                cout << endl;
             }
 #endif
-            printf("----------- DFA End -----------\n");
+            cout << "----------- DFA End -----------" << endl;
         }
 
         void printDFA(fstream& fs)
@@ -812,7 +813,7 @@ public:
 
             for (set<DFA_State*>::const_iterator i = tmp.begin(), m = tmp.end(); i != m; ++i)
             {
-                fs << string::format("State: %03d\n", (*i)->idx);
+                fs << string::format("State: %03d", (*i)->idx) << endl;
                 for (vector<EpsilonNFA_State*>::const_iterator j = (*i)->content.begin(), n = (*i)->content.end(); j != n; ++j)
                 {
                     fs << string::format("%03d ", (*j)->idx);
@@ -825,7 +826,7 @@ public:
 
         void printShowName()const
         {
-            printf(showName.c_str());
+            cout << showName;
         }
 
         void printShowName(fstream& fs)const

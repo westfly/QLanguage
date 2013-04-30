@@ -83,23 +83,23 @@ namespace QLanguage
                 printf("\033[1m\033[31m");
 #endif
                 printf("error: %s in file\n", description);
+#ifdef WIN32
                 printf("%s on line %d\n", fileName, line);
+#else
+                printf("%s on line %lu\n", fileName, line);
+#endif
 #if defined(_DEBUG) && DEBUG_LEVEL == 3 && defined(WIN32) && !defined(__MINGW32__) && !defined(__CYGWIN__)
                 for (DWORD j = 0; j < dwCallStackDepth; ++j)
                 {
                     CallStack::FuncInfo funcInfo;
                     CallStack::getInstance().getFuncInfo(callStack[j], funcInfo);
-                    printf("Function: %s\n", funcInfo.szFuncName);
-                    printf("File: %s in line %d\n", funcInfo.szFilePath, funcInfo.dwLineNumber);
+                    cerr << string::format("Function: %s", funcInfo.szFuncName) << endl;
+                    cerr << string::format("File: %s in line %d", funcInfo.szFilePath, funcInfo.dwLineNumber) << endl;
                 }
 #endif
             }
         };
     }
 }
-
-#ifdef CALLSTACK_MAX_DEPTH
-#undef CALLSTACK_MAX_DEPTH
-#endif
 
 #endif

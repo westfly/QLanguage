@@ -367,7 +367,7 @@ public:
 
     ~basic_string()
     {
-        destruct(start, end_of_element);
+        destruct(start, finish);
         if (start != iterator::null()) Alloc::deallocate(start, end_of_element - start);
     }
 
@@ -472,7 +472,7 @@ public:
     void setsize(size_t size)
     {
         if (size <= capacity()) finish = start + size;
-        else throw error<basic_string<char> >("size is too big", __FILE__, __LINE__);
+        else throw error<const char*>("size is too big", __FILE__, __LINE__);
     }
 
     inline const size_type capacity()const
@@ -615,7 +615,7 @@ public:
     template <typename T2>
     static const basic_string<T2> format(const T* fmt, ...)
     {
-        throw error<char*>("Doesn't support!", __FILE__, __LINE__);
+        throw error<const char*>("Doesn't support!", __FILE__, __LINE__);
         return basic_string<T2>();
     }
 
